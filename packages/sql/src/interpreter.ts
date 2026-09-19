@@ -1,5 +1,6 @@
 import {
   createInterpreter,
+  type OperatorRegistry,
   type Condition,
   type InterpretationContext,
   type InterpreterOptions
@@ -173,7 +174,7 @@ interface SqlInterpreterOptions {
 }
 
 export function createSqlInterpreter(
-  operators: Record<string, SqlOperator<any>>,
+  operators: Record<string, SqlOperator<any>> | OperatorRegistry<SqlOperator<any>>,
   options?: SqlInterpreterOptions
 ) {
   const interpret = createInterpreter<SqlOperator<any>>(operators, options);

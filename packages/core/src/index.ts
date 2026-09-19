@@ -3,6 +3,7 @@ export * from './Condition';
 export * from './interpreter';
 export * from './parsers/defaultInstructionParsers';
 export * from './parsers/ObjectQueryParser';
+export * from './registry';
 export * from './translator';
 export * from './types';
 export {

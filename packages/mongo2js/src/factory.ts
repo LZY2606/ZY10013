@@ -1,4 +1,4 @@
-import { createTranslatorFactory, ParsingInstruction, Condition, ITSELF } from '@ucast/core';
+import { createTranslatorFactory, createOperatorRegistry, ParsingInstruction, Condition, ITSELF } from '@ucast/core';
 import {
   MongoQuery,
   MongoQueryParser,
@@ -86,18 +86,21 @@ export function createFactory<
 
 export const guard = createFactory(allParsingInstructions, allInterpreters);
 
-const compoundOperators = ['$and', '$or'] as const;
-const allPrimitiveParsingInstructions = compoundOperators.reduce((instructions, name) => {
-  instructions[name] = { ...instructions[name], type: 'field' } as any;
-  return instructions;
-}, {
-  ...allParsingInstructions,
-  $nor: {
-    ...allParsingInstructions.$nor,
-    type: 'field',
-    parse: defaultParsers.compound
-  }
-});
+const asFieldInstruction = (name: keyof typeof allParsingInstructions) => ({
+  ...allParsingInstructions[name],
+  type: 'field',
+}) as ParsingInstruction;
+
+const allPrimitiveParsingInstructions = createOperatorRegistry<ParsingInstruction>(
+  allParsingInstructions
+)
+  .override('$and', asFieldInstruction('$and'))
+  .override('$or', asFieldInstruction('$or'))
+  .override('$nor', {
+    ...asFieldInstruction('$nor'),
+    parse: defaultParsers.compound,
+  } as ParsingInstruction)
+  .toRecord();
 
 export const squire = createFactory(allPrimitiveParsingInstructions, allInterpreters, {
   forPrimitives: true

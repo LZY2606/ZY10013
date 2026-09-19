@@ -1,4 +1,5 @@
 import { Condition } from './Condition';
+import { OperatorRegistry } from './registry';
 
 type ArgsExceptLast<F extends (...args: any[]) => any> =
   F extends (a: any, c: any) => any
@@ -18,11 +19,11 @@ export interface InterpretationContext<T extends AnyInterpreter> {
   interpret(...args: ArgsExceptLast<T>): ReturnType<T>;
 }
 
-function getInterpreter<T extends Record<string, AnyInterpreter>>(
-  interpreters: T,
-  operator: keyof T
+function getInterpreter<T>(
+  interpreters: OperatorRegistry<T>,
+  operator: string
 ) {
-  const interpret = interpreters[operator];
+  const interpret = interpreters.get(operator);
 
   if (typeof interpret !== 'function') {
     throw new Error(`Unable to interpret "${String(operator)}" condition. Did you forget to register interpreter for it?`);
@@ -40,41 +41,40 @@ function defaultInterpreterName(condition: Condition) {
   return condition.operator;
 }
 
+type InvokeOperator = (
+  operator: AnyInterpreter,
+  condition: Condition,
+  value: unknown,
+  params: unknown,
+  context: {}
+) => unknown;
+
+const invokeByArity: Record<number, InvokeOperator> = {
+  1: (operator, condition, _value, _params, context) => operator(condition, context),
+  2: (operator, condition, value, _params, context) => operator(condition, value, context),
+  3: (operator, condition, value, params, context) => operator(condition, value, params, context),
+};
+
 export function createInterpreter<T extends AnyInterpreter, U extends {} = {}>(
-  interpreters: Record<string, T>,
+  interpreters: Record<string, T> | OperatorRegistry<T>,
   rawOptions?: U
 ) {
   const options = rawOptions as U & InterpreterOptions;
   const getInterpreterName = options && options.getInterpreterName || defaultInterpreterName;
-  let interpret: InterpretationContext<T>['interpret'];
+  const registry = interpreters instanceof OperatorRegistry
+    ? interpreters
+    : new OperatorRegistry(interpreters);
+  const invoke = invokeByArity[options && options.numberOfArguments || 2];
 
-  switch (options ? options.numberOfArguments : 0) {
-    case 1:
-      interpret = ((condition) => {
-        const interpreterName = getInterpreterName(condition, options);
-        const interpretOperator = getInterpreter(interpreters, interpreterName);
-        return interpretOperator(condition, defaultContext);  
-      });
-      break;
-    case 3:
-      interpret = ((
-        condition: ArgsExceptLast<T>[0],
-        value: ArgsExceptLast<T>[1],
-        params: ArgsExceptLast<T>[2]
-      ) => {
-        const interpreterName = getInterpreterName(condition, options);
-        const interpretOperator = getInterpreter(interpreters, interpreterName);
-        return interpretOperator(condition, value, params, defaultContext);  
-      }) as unknown as InterpretationContext<T>['interpret'];
-      break;
-    default:
-      interpret = ((condition, value) => {
-        const interpreterName = getInterpreterName(condition, options);
-        const interpretOperator = getInterpreter(interpreters, interpreterName);
-        return interpretOperator(condition, value, defaultContext);  
-      }) as InterpretationContext<T>['interpret'];
-      break;
-  }
+  const interpret = ((
+    condition: ArgsExceptLast<T>[0],
+    value: ArgsExceptLast<T>[1],
+    params: ArgsExceptLast<T>[2]
+  ) => {
+    const interpreterName = getInterpreterName(condition, options);
+    const interpretOperator = getInterpreter(registry, interpreterName);
+    return invoke(interpretOperator, condition, value, params, defaultContext);
+  }) as unknown as InterpretationContext<T>['interpret'];
 
   const defaultContext = {
     ...options,

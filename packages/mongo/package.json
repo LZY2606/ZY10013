@@ -15,6 +15,7 @@
     }
   },
   "scripts": {
+    "pretest": "pnpm --filter \"@ucast/mongo^...\" build",
     "build": "rm -rf dist/* && tsc && tsdown -c ../../tsdown.config.mjs",
     "lint": "eslint --ext .js,.ts src/ spec/",
     "test": "mocha -r ts-node/register spec/*",

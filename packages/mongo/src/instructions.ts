@@ -2,6 +2,7 @@ import {
   CompoundCondition,
   FieldCondition,
   NamedInstruction,
+  ParsingInstruction,
   CompoundInstruction,
   FieldInstruction,
   DocumentInstruction,
@@ -12,6 +13,7 @@ import {
   optimizedCompoundCondition,
   ObjectQueryFieldParsingContext,
   ParsingContext,
+  createOperatorRegistry,
 } from '@ucast/core';
 import type { MongoQuery } from './types';
 
@@ -23,7 +25,6 @@ export const $and: CompoundInstruction<MongoQuery<any>[]> = {
     return optimizedCompoundCondition(instruction.name, conditions);
   }
 };
-export const $or = $and;
 export const $nor: CompoundInstruction<MongoQuery<any>[]> = {
   type: 'compound',
   validate: ensureIsNonEmptyArray,
@@ -87,8 +88,6 @@ export const $in: FieldInstruction<unknown[]> = {
   type: 'field',
   validate: ensureIsArray,
 };
-export const $nin = $in;
-export const $all = $in;
 export const $mod: FieldInstruction<[number, number]> = {
   type: 'field',
   validate(instruction, value) {
@@ -107,14 +106,10 @@ export const $gte: FieldInstruction<Comparable> = {
   type: 'field',
   validate: ensureIsComparable
 };
-export const $gt = $gte;
-export const $lt = $gt;
-export const $lte = $gt;
 
 export const $eq: FieldInstruction = {
   type: 'field',
 };
-export const $ne = $eq;
 
 export interface RegExpFieldContext extends FieldParsingContext {
   query: {
@@ -145,6 +140,37 @@ export const $where: DocumentInstruction<() => boolean> = {
   type: 'document',
   validate: ensureIs('function'),
 };
+
+const instructionsRegistry = createOperatorRegistry<ParsingInstruction<any, any>>({
+  $and,
+  $nor,
+  $not,
+  $elemMatch,
+  $size,
+  $in,
+  $mod,
+  $exists,
+  $gte,
+  $eq,
+  $regex,
+  $options,
+  $where,
+})
+  .alias('$or', '$and')
+  .alias('$nin', '$in')
+  .alias('$all', '$in')
+  .alias('$gt', '$gte')
+  .alias('$lt', '$gte')
+  .alias('$lte', '$gte')
+  .alias('$ne', '$eq');
+
+export const $or = instructionsRegistry.get('$or') as typeof $and;
+export const $nin = instructionsRegistry.get('$nin') as typeof $in;
+export const $all = instructionsRegistry.get('$all') as typeof $in;
+export const $gt = instructionsRegistry.get('$gt') as typeof $gte;
+export const $lt = instructionsRegistry.get('$lt') as typeof $gte;
+export const $lte = instructionsRegistry.get('$lte') as typeof $gte;
+export const $ne = instructionsRegistry.get('$ne') as typeof $eq;
 
 function ensureIsArray(instruction: NamedInstruction, value: unknown) {
   if (!Array.isArray(value)) {
