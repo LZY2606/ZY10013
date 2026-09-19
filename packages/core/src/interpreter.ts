@@ -1,4 +1,5 @@
 import { Condition } from './Condition';
+import { OperatorRegistry } from './OperatorRegistry';
 
 type ArgsExceptLast<F extends (...args: any[]) => any> =
   F extends (a: any, c: any) => any
@@ -18,14 +19,20 @@ export interface InterpretationContext<T extends AnyInterpreter> {
   interpret(...args: ArgsExceptLast<T>): ReturnType<T>;
 }
 
-function getInterpreter<T extends Record<string, AnyInterpreter>>(
-  interpreters: T,
-  operator: keyof T
-) {
-  const interpret = interpreters[operator];
+export type InterpreterRegistry<T extends AnyInterpreter> =
+  | Record<string, T>
+  | OperatorRegistry<T>;
+
+function getInterpreter<T extends AnyInterpreter>(
+  interpreters: InterpreterRegistry<T>,
+  operator: string
+): T {
+  const interpret = interpreters instanceof OperatorRegistry
+    ? interpreters.resolve(operator)
+    : interpreters[operator];
 
   if (typeof interpret !== 'function') {
-    throw new Error(`Unable to interpret "${String(operator)}" condition. Did you forget to register interpreter for it?`);
+    throw new Error(`Unable to interpret "${operator}" condition. Did you forget to register interpreter for it?`);
   }
 
   return interpret;
@@ -41,45 +48,33 @@ function defaultInterpreterName(condition: Condition) {
 }
 
 export function createInterpreter<T extends AnyInterpreter, U extends {} = {}>(
-  interpreters: Record<string, T>,
+  interpreters: InterpreterRegistry<T>,
   rawOptions?: U
 ) {
-  const options = rawOptions as U & InterpreterOptions;
-  const getInterpreterName = options && options.getInterpreterName || defaultInterpreterName;
+  const options = (rawOptions || {}) as U & InterpreterOptions;
+  const getInterpreterName = options.getInterpreterName || defaultInterpreterName;
+  const context = { ...options } as InterpretationContext<T> & U;
   let interpret: InterpretationContext<T>['interpret'];
 
-  switch (options ? options.numberOfArguments : 0) {
-    case 1:
-      interpret = ((condition) => {
-        const interpreterName = getInterpreterName(condition, options);
-        const interpretOperator = getInterpreter(interpreters, interpreterName);
-        return interpretOperator(condition, defaultContext);  
-      });
-      break;
-    case 3:
-      interpret = ((
-        condition: ArgsExceptLast<T>[0],
-        value: ArgsExceptLast<T>[1],
-        params: ArgsExceptLast<T>[2]
-      ) => {
-        const interpreterName = getInterpreterName(condition, options);
-        const interpretOperator = getInterpreter(interpreters, interpreterName);
-        return interpretOperator(condition, value, params, defaultContext);  
-      }) as unknown as InterpretationContext<T>['interpret'];
-      break;
-    default:
-      interpret = ((condition, value) => {
-        const interpreterName = getInterpreterName(condition, options);
-        const interpretOperator = getInterpreter(interpreters, interpreterName);
-        return interpretOperator(condition, value, defaultContext);  
-      }) as InterpretationContext<T>['interpret'];
-      break;
+  if (options.numberOfArguments === 1) {
+    interpret = ((condition: Condition) => {
+      const interpreterName = getInterpreterName(condition, options);
+      return getInterpreter(interpreters, interpreterName)(condition, context as any);
+    }) as unknown as InterpretationContext<T>['interpret'];
+  } else if (options.numberOfArguments === 3) {
+    interpret = ((condition: Condition, value: unknown, params: unknown) => {
+      const interpreterName = getInterpreterName(condition, options);
+      const operator = getInterpreter(interpreters, interpreterName);
+      return operator(condition, value, params, context as any);
+    }) as unknown as InterpretationContext<T>['interpret'];
+  } else {
+    interpret = ((condition: Condition, value: unknown) => {
+      const interpreterName = getInterpreterName(condition, options);
+      return getInterpreter(interpreters, interpreterName)(condition, value, context as any);
+    }) as InterpretationContext<T>['interpret'];
   }
 
-  const defaultContext = {
-    ...options,
-    interpret,
-  } as InterpretationContext<T> & U;
+  (context as { interpret: typeof interpret }).interpret = interpret;
 
-  return defaultContext.interpret;
+  return interpret;
 }

@@ -1,14 +1,21 @@
-import { createTranslatorFactory, ParsingInstruction, Condition, ITSELF } from '@ucast/core';
+import {
+  createTranslatorFactory,
+  ParsingInstruction,
+  Condition,
+  ITSELF,
+  OperatorRegistry,
+  normalizeOperatorNames,
+} from '@ucast/core';
 import {
   MongoQuery,
   MongoQueryParser,
   MongoQueryFieldOperators,
   allParsingInstructions,
-  defaultParsers
+  defaultParsers,
 } from '@ucast/mongo';
 import {
   createJsInterpreter,
-  allInterpreters,
+  interpreterRegistry,
   JsInterpreter,
   JsInterpretationOptions,
   compare
@@ -64,9 +71,12 @@ type FilterType<T extends { forPrimitives?: true }> = T['forPrimitives'] extends
   ? PrimitiveFilter
   : Filter;
 
+type ParsingInstructions = Record<string, ParsingInstruction<any, any>> | OperatorRegistry<any>;
+type Interpreters = Record<string, JsInterpreter<any>> | OperatorRegistry<JsInterpreter<any>>;
+
 export function createFactory<
-  T extends Record<string, ParsingInstruction<any, any>>,
-  I extends Record<string, JsInterpreter<any>>,
+  T extends ParsingInstructions,
+  I extends Interpreters,
   P extends { forPrimitives?: true }
 >(instructions: T, interpreters: I, options?: Partial<FactoryOptions> & P): FilterType<P> {
   const parser = new MongoQueryParser(instructions);
@@ -84,22 +94,18 @@ export function createFactory<
   return createTranslatorFactory(parser.parse, interpret) as any;
 }
 
-export const guard = createFactory(allParsingInstructions, allInterpreters);
+export const guard = createFactory(allParsingInstructions, interpreterRegistry);
 
-const compoundOperators = ['$and', '$or'] as const;
-const allPrimitiveParsingInstructions = compoundOperators.reduce((instructions, name) => {
-  instructions[name] = { ...instructions[name], type: 'field' } as any;
-  return instructions;
-}, {
+const fieldCompound: ParsingInstruction = { type: 'field', parse: defaultParsers.compound };
+const primitivesRegistry = normalizeOperatorNames({
   ...allParsingInstructions,
-  $nor: {
-    ...allParsingInstructions.$nor,
-    type: 'field',
-    parse: defaultParsers.compound
-  }
-});
+  $and: fieldCompound,
+  $or: fieldCompound,
+  $nor: fieldCompound,
+}, name => name.slice(1));
 
-export const squire = createFactory(allPrimitiveParsingInstructions, allInterpreters, {
+export const squire = createFactory(primitivesRegistry, interpreterRegistry, {
   forPrimitives: true
 });
+
 export const filter = guard; // TODO: remove in next major version

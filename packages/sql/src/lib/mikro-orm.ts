@@ -1,12 +1,11 @@
 import { type EntityMetadata, type EntityProperty } from '@mikro-orm/core';
 import { type Condition } from '@ucast/core';
 import {
-  allInterpreters,
+  interpreterRegistry,
   createDialects,
   createSqlInterpreter,
   mysql,
   type SqlQueryOptions,
-  type SqlOperator
 } from '../index.ts';
 import {
   buildDirectRelationQuery,
@@ -70,7 +69,8 @@ function createMikroOrmDialects(mikroOrmOptions: MikroOrmInterpreterOptions = {}
 }
 
 export function createInterpreter(
-  interpreters: Record<string, SqlOperator<any>>,
+  interpreters: Parameters<typeof createSqlInterpreter>[0] =
+    interpreterRegistry,
   mikroOrmOptions: MikroOrmInterpreterOptions = {},
 ) {
   const interpretSQL = createSqlInterpreter(interpreters);
@@ -93,7 +93,7 @@ export function createInterpreter(
   };
 }
 
-export const interpret = createInterpreter(allInterpreters);
+export const interpret = createInterpreter(interpreterRegistry);
 
 function directRelationColumnPairs(prop: MikroOrmRelation): RelationColumnPair[] {
   if (prop.kind === 'm:1' || (prop.owner && prop.joinColumns?.length)) {

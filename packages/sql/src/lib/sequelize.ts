@@ -2,8 +2,7 @@ import { type Condition } from '@ucast/core';
 import { type Association, type ModelStatic, Utils, literal } from 'sequelize';
 import {
   createSqlInterpreter,
-  allInterpreters,
-  type SqlOperator,
+  interpreterRegistry,
   createDialects,
   mysql,
   type SqlQueryOptions,
@@ -71,7 +70,8 @@ export const getRelationMetadata: GetRelationMetadata = (
 };
 
 export function createInterpreter(
-  interpreters: Record<string, SqlOperator<any>>,
+  interpreters: Parameters<typeof createSqlInterpreter>[0] =
+    interpreterRegistry,
   sequelizeOptions: SequelizeInterpreterOptions = {},
 ) {
   const interpretSQL = createSqlInterpreter(interpreters);
@@ -98,7 +98,7 @@ export function createInterpreter(
   };
 }
 
-export const interpret = createInterpreter(allInterpreters);
+export const interpret = createInterpreter(interpreterRegistry);
 
 type BelongsToAssociation = Association & {
   associationType: 'BelongsTo';

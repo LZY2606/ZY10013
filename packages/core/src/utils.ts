@@ -65,15 +65,19 @@ export interface IgnoreValue {
 
 export function hasOperators<T>(
   value: any,
-  instructions: Record<string, unknown>,
+  instructions: Record<string, unknown> | { has(name: string): boolean },
   skipIgnore = false,
 ): value is T {
   if (!value || value && value.constructor !== Object) {
     return false;
   }
 
+  const hasInstruction = typeof (instructions as { has?: unknown }).has === 'function'
+    ? (name: string) => (instructions as { has(name: string): boolean }).has(name)
+    : (name: string) => hasOwn(instructions as Record<string, unknown>, name);
+
   for (const prop in value) {
-    const hasProp = hasOwn(value, prop) && hasOwn(instructions, prop);
+    const hasProp = hasOwn(value, prop) && hasInstruction(prop);
     if (hasProp && (!skipIgnore || value[prop] !== ignoreValue)) {
       return true;
     }

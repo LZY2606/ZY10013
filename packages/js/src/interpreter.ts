@@ -1,4 +1,4 @@
-import { createInterpreter, ITSELF } from '@ucast/core';
+import { createInterpreter, ITSELF, OperatorRegistry, createOperatorRegistry, OperatorOrAlias } from '@ucast/core';
 import { getValueByPath, AnyObject, GetField } from './utils';
 import { IsArray, JsInterpretationOptions, JsInterpreter } from './types';
 
@@ -57,7 +57,7 @@ export function createJsInterpreter<
   T extends JsInterpreter<any>,
   O extends Partial<JsInterpretationOptions>
 >(
-  operators: Record<string, T>,
+  operators: Record<string, OperatorOrAlias<T>> | OperatorRegistry<T>,
   options: O = {} as O
 ) {
   const isArray = options.isArray || defaultIsArray;
@@ -65,7 +65,11 @@ export function createJsInterpreter<
     return getObjectField(object, field, options.get as GetField || defaultGet, isArray);
   };
 
-  return createInterpreter(operators, {
+  const registry = operators instanceof OperatorRegistry
+    ? operators
+    : createOperatorRegistry(operators);
+
+  return createInterpreter(registry, {
     get,
     compare: options.compare || compare,
     isArray,

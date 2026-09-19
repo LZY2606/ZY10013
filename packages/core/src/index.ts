@@ -1,4 +1,5 @@
 export * from './builder';
+export * from './OperatorRegistry';
 export * from './Condition';
 export * from './interpreter';
 export * from './parsers/defaultInstructionParsers';

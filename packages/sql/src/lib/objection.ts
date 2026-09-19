@@ -2,8 +2,7 @@ import { type Condition } from '@ucast/core';
 import { type Model, type ModelClass, type QueryBuilder } from 'objection';
 import {
   createSqlInterpreter,
-  allInterpreters,
-  type SqlOperator,
+  interpreterRegistry,
   createDialects,
   mysql,
   type SqlQueryOptions,
@@ -71,7 +70,8 @@ function createObjectionDialects(objectionOptions: ObjectionInterpreterOptions =
 }
 
 export function createInterpreter(
-  interpreters: Record<string, SqlOperator<any>>,
+  interpreters: Parameters<typeof createSqlInterpreter>[0] =
+    interpreterRegistry,
   objectionOptions: ObjectionInterpreterOptions = {},
 ) {
   const interpretSQL = createSqlInterpreter(interpreters);
@@ -93,7 +93,7 @@ export function createInterpreter(
   };
 }
 
-export const interpret = createInterpreter(allInterpreters);
+export const interpret = createInterpreter(interpreterRegistry);
 
 function getRootAlias<T extends Model>(query: QueryBuilder<T>) {
   const queryWithTableRefs = query as QueryBuilder<T> & {

@@ -1,8 +1,11 @@
 import {
   createInterpreter,
+  createOperatorRegistry,
+  OperatorRegistry,
   type Condition,
   type InterpretationContext,
-  type InterpreterOptions
+  type InterpreterOptions,
+  type OperatorOrAlias,
 } from '@ucast/core';
 import { type DialectOptions } from './dialects.ts';
 
@@ -173,10 +176,13 @@ interface SqlInterpreterOptions {
 }
 
 export function createSqlInterpreter(
-  operators: Record<string, SqlOperator<any>>,
+  operators: Record<string, OperatorOrAlias<SqlOperator<any>>> | OperatorRegistry<SqlOperator<any>>,
   options?: SqlInterpreterOptions
 ) {
-  const interpret = createInterpreter<SqlOperator<any>>(operators, options);
+  const registry = operators instanceof OperatorRegistry
+    ? operators
+    : createOperatorRegistry(operators);
+  const interpret = createInterpreter<SqlOperator<any>>(registry, options);
   return (condition: Condition, sqlOptions: SqlQueryOptions, relationContext?: unknown) => {
     return interpret(condition, new Query(sqlOptions, '', relationContext)).toJSON();
   };

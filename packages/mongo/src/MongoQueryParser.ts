@@ -4,18 +4,23 @@ import {
   ParsingInstruction,
   ObjectQueryParser,
   FieldQueryOperators,
+  OperatorRegistry,
+  normalizeOperatorNames,
+  NamedInstruction,
 } from '@ucast/core';
 import { MongoQuery } from './types';
+import { parsingInstructionsRegistry } from './registry';
 
 export interface ParseOptions {
   field: string
 }
 
+type Instructions = Record<string, ParsingInstruction> | OperatorRegistry<NamedInstruction>;
+
 export class MongoQueryParser extends ObjectQueryParser<MongoQuery<any>> {
-  constructor(instructions: Record<string, ParsingInstruction>) {
-    super(instructions, {
+  constructor(instructions: Instructions = parsingInstructionsRegistry) {
+    super(toRegistry(instructions), {
       defaultOperatorName: '$eq',
-      operatorToConditionName: name => name.slice(1),
     });
   }
 
@@ -29,4 +34,12 @@ export class MongoQueryParser extends ObjectQueryParser<MongoQuery<any>> {
 
     return super.parse(query);
   }
+}
+
+function toRegistry(instructions: Instructions) {
+  if (instructions instanceof OperatorRegistry) {
+    return instructions;
+  }
+
+  return normalizeOperatorNames(instructions, name => name.slice(1));
 }

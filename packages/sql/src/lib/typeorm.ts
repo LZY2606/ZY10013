@@ -2,8 +2,7 @@ import { type Condition } from '@ucast/core';
 import { type EntityMetadata, type ObjectLiteral, type SelectQueryBuilder } from 'typeorm';
 import {
   createSqlInterpreter,
-  allInterpreters,
-  type SqlOperator,
+  interpreterRegistry,
   createDialects,
   type SqlQueryOptions
 } from '../index.ts';
@@ -74,7 +73,8 @@ function createTypeOrmDialects(typeormOptions: TypeOrmInterpreterOptions = {}) {
 }
 
 export function createInterpreter(
-  interpreters: Record<string, SqlOperator<any>>,
+  interpreters: Parameters<typeof createSqlInterpreter>[0] =
+    interpreterRegistry,
   typeormOptions: TypeOrmInterpreterOptions = {},
 ) {
   const interpretSQL = createSqlInterpreter(interpreters);
@@ -99,7 +99,7 @@ export function createInterpreter(
   };
 }
 
-export const interpret = createInterpreter(allInterpreters);
+export const interpret = createInterpreter(interpreterRegistry);
 
 function getQueryDataSource<Entity extends ObjectLiteral>(query: SelectQueryBuilder<Entity>) {
   const typeormQuery = query as SelectQueryBuilder<Entity> & {

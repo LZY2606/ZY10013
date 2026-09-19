@@ -5,6 +5,7 @@ import {
   FieldParsingContext,
   ParsingContext,
 } from '../types';
+import { OperatorRegistry, normalizeOperatorNames } from '../OperatorRegistry';
 import { buildAnd } from '../builder';
 import { defaultInstructionParsers } from './defaultInstructionParsers';
 import {
@@ -19,7 +20,10 @@ export type FieldQueryOperators<T extends {}> = {
   [K in keyof T]: T[K] extends {} ? T[K] : never
 }[keyof T];
 
-type ParsingInstructions = Record<string, NamedInstruction>;
+type NamedParsingInstruction = NamedInstruction;
+export type ParsingInstructionRegistry =
+  | Record<string, ParsingInstruction>
+  | OperatorRegistry<NamedParsingInstruction>;
 
 export interface QueryOptions {
   operatorToConditionName?(name: string): string
@@ -39,7 +43,7 @@ export class ObjectQueryParser<
   T extends Record<any, any>,
   U extends FieldQueryOperators<T> = FieldQueryOperators<T>
 > {
-  private readonly _instructions: ParsingInstructions;
+  private readonly _instructions: OperatorRegistry<NamedParsingInstruction>;
   private _fieldInstructionContext: ObjectQueryFieldParsingContext;
   private _documentInstructionContext: ParsingContext<{ query: {} }>;
   private readonly _options: Required<
@@ -48,17 +52,14 @@ export class ObjectQueryParser<
 
   private readonly _objectKeys: typeof Object.keys;
 
-  constructor(instructions: Record<string, ParsingInstruction>, options: QueryOptions = object()) {
+  constructor(instructions: ParsingInstructionRegistry, options: QueryOptions = object()) {
     this.parse = this.parse.bind(this);
     this._options = {
       operatorToConditionName: options.operatorToConditionName || identity,
       defaultOperatorName: options.defaultOperatorName || 'eq',
       mergeFinalConditions: options.mergeFinalConditions || buildAnd,
     };
-    this._instructions = Object.keys(instructions).reduce((all, name) => {
-      all[name] = { name: this._options.operatorToConditionName(name), ...instructions[name] };
-      return all;
-    }, {} as ParsingInstructions);
+    this._instructions = this.createRegistry(instructions);
     this._fieldInstructionContext = {
       ...options.fieldContext,
       field: '',
@@ -78,6 +79,16 @@ export class ObjectQueryParser<
     this._objectKeys = options.useIgnoreValue ? objectKeysSkipIgnore : Object.keys;
   }
 
+  private createRegistry(
+    instructions: ParsingInstructionRegistry
+  ): OperatorRegistry<NamedParsingInstruction> {
+    if (instructions instanceof OperatorRegistry) {
+      return instructions as OperatorRegistry<NamedParsingInstruction>;
+    }
+
+    return normalizeOperatorNames(instructions, this._options.operatorToConditionName);
+  }
+
   setParse(parse: this['parse']) {
     this.parse = parse;
     this._fieldInstructionContext.parse = parse;
@@ -85,7 +96,7 @@ export class ObjectQueryParser<
   }
 
   protected parseField(field: string, operator: string, value: unknown, parentQuery: {}) {
-    const instruction = this._instructions[operator];
+    const instruction = this._instructions.resolve(operator);
 
     if (!instruction) {
       throw new Error(`Unsupported operator "${operator}"`);
@@ -121,9 +132,8 @@ export class ObjectQueryParser<
 
     for (let i = 0, length = keys.length; i < length; i++) {
       const op = keys[i];
-      const instruction = this._instructions[op];
 
-      if (!instruction) {
+      if (!this._instructions.has(op)) {
         throw new Error(`Field query for "${field}" may contain only operators or a plain object as a value`);
       }
 
@@ -143,7 +153,7 @@ export class ObjectQueryParser<
     for (let i = 0, length = keys.length; i < length; i++) {
       const key = keys[i];
       const value = query[key];
-      const instruction = this._instructions[key];
+      const instruction = this._instructions.resolve(key);
 
       if (instruction) {
         if (instruction.type !== 'document' && instruction.type !== 'compound') {
